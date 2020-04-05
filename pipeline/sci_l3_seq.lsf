@@ -1,0 +1,46 @@
+
+=cut sss 1
+
+inputFile=input
+
+ncore=1
+mem=8000
+
+module load conda3
+
+source activate /home/yli11/.conda/envs/Sci_L3
+
+## global parameters ##
+
+src=/home/yli11/Programs/Sci-L3-seq/src
+RT_PRIMER=GGGATGCAGCTCGCTCCTG
+SSS_barcode_list=SSS_barcode.list 
+
+  # -h, --help            show this help message and exit
+  # -r1 READ1, --read1 READ1
+                        # R1 fastq file (default: None)
+  # -r2 READ2, --read2 READ2
+                        # R2 fastq file (default: None)
+  # --sample_ID SAMPLE_ID
+                        # sample_ID (default: None)
+  # --RT_primer RT_PRIMER
+                        # RT_primer (default: None)
+  # --barcode_list BARCODE_LIST
+                        # list of barcodes (default: None)
+  # --mismatch_sss MISMATCH_SSS
+                        # mismatch_sss (default: 0)
+  # --mismatch_RT MISMATCH_RT
+                        # mismatch_RT (default: 3)
+
+python $src/step1_barcode_SSS.py -r1 ${COL1} -r2 ${COL2} --sample_ID ${COL3} --RT_primer $RT_PRIMER --barcode_list $SSS_barcode_list
+
+mv -f ${COL3} {{jid}}
+
+
+
+
+
+
+
+
+
