@@ -5,7 +5,7 @@ Reference code was modified and fit into HemTools pipeline (https://hemtools.rea
 
 # fastq read example
 
-![example][fastq_read_example.png]
+![example](fastq_read_example.png)
 
 # Pipeline
 
