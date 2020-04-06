@@ -8,7 +8,7 @@ from multiprocessing import Pool
 from functools import partial
 import os
 import argparse
-
+import pandas as pd
 '''
 	this script accepts and opens a R1 file, a R2 file, an RT primer sequence, and a SSS barcode list; then reorders the read pairs, and extracts and matches the nearest sss barcode and attach the sss barcode to R1 and R2 read names.
 	the output files include ordered R1 and R2 files, noRTprimer.R1.fq.gz and noRTprimer.R2.fq.gz
@@ -18,22 +18,30 @@ import argparse
 def SSS_barcode_attach_list(Read1,Read2,label, barcode_list, RT_primer, mismatch_sss, mismatch_RT):
 	#open the read1, read2, and output files
 	output_folder = label
+	os.system("mkdir -p %s"%(output_folder))
 	R1_out_file = output_folder + "/" + label + ".R1.ordered.fastq.gz"
 	R2_out_file = output_folder + "/" + label + ".R2.ordered.fastq.gz"
-	noRT_R1_out_file = output_folder + "/" + label + ".noRTprimer.R1.fq.gz"
-	noRT_R2_out_file = output_folder + "/" + label + ".noRTprimer.R2.fq.gz"
-
+	noRT_R1_out_file = output_folder + "/" + label + ".noRT.R1.fq.gz"
+	noRT_R2_out_file = output_folder + "/" + label + ".noRT.R2.fq.gz"
+	noBC3_R1_out_file = output_folder + "/" + label + ".noBC3.R1.fq.gz"
+	noBC3_R2_out_file = output_folder + "/" + label + ".noBC3.R2.fq.gz"
+	
 	f1 = gzip.open(Read1)
 	f2 = gzip.open(Read2)
 	f3 = gzip.open(R1_out_file, 'wb')
 	f4 = gzip.open(R2_out_file, 'wb')
 	f5 = gzip.open(noRT_R1_out_file, 'wb')
 	f6 = gzip.open(noRT_R2_out_file, 'wb')
+	f7 = gzip.open(noBC3_R1_out_file, 'wb')
+	f8 = gzip.open(noBC3_R2_out_file, 'wb')
 	
 	line1 = f1.readline()
 	line2 = f2.readline()
-
+	count = 0
 	while (line1):
+		count +=1
+		if count % 10000 == 0:
+			print ("We have processed %s number of reads"%(count))
 		name_r1=line1
 		name_r2=line2
 		line1 = f1.readline()
@@ -50,14 +58,18 @@ def SSS_barcode_attach_list(Read1,Read2,label, barcode_list, RT_primer, mismatch
 		if (dist_rt_r1 <= mismatch_RT):
 			junk=False
 			for barcode in barcode_list:
+				
 				mismatch = distance(barcode, target_sss_r1)
+				# print (barcode,target_sss_r1,mismatch)
 				find = False
 				
 				if (mismatch <= mismatch_sss):
 					find = True
 					UMI = line1[:4]
-					first_line_r1 = '@' + barcode + ',' + UMI + ',' + name_r1[1:]
-					first_line_r2 = '@' + barcode + ',' + UMI + ',' + name_r2[1:]
+					# first_line_r1 = '@' + barcode + ',' + UMI + ',' + name_r1[1:]
+					# first_line_r2 = '@' + barcode + ',' + UMI + ',' + name_r2[1:]
+					first_line_r1 = name_r1
+					first_line_r2 = name_r2
 					f3.write(first_line_r1)
 					f4.write(first_line_r2)
 	
@@ -81,13 +93,29 @@ def SSS_barcode_attach_list(Read1,Read2,label, barcode_list, RT_primer, mismatch
 					break
 					
 			if find == False:
+				first_line_r1 = name_r1
+				first_line_r2 = name_r2
+				f7.write(first_line_r1)
+				f8.write(first_line_r2)
+
+				second_line_r1 = line1
+				second_line_r2 = line2
+				f7.write(second_line_r1)
+				f8.write(second_line_r2)
+
+				third_line_r1 = f1.readline()
+				third_line_r2 = f2.readline()
+				f7.write(third_line_r1)
+				f8.write(third_line_r2)
+
+				four_line_r1 = f1.readline()
+				four_line_r2 = f2.readline()
+				f7.write(four_line_r1)
+				f8.write(four_line_r2)
 				line1 = f1.readline()
-				line1 = f1.readline()
-				line1 = f1.readline()
-				line2 = f2.readline()
-				line2 = f2.readline()
-				line2 = f2.readline()
-				
+				line2 = f2.readline()			
+			
+
 		#swap R1 R2 but keep read name
 		elif (dist_rt_r2 <= mismatch_RT):
 			junk=False
@@ -98,8 +126,10 @@ def SSS_barcode_attach_list(Read1,Read2,label, barcode_list, RT_primer, mismatch
 				if (mismatch <= mismatch_sss):
 					find = True
 					UMI = line2[:4]
-					first_line_r1 = '@' + barcode + ',' + UMI + ',' + 'swap' + ',' + name_r1[1:]
-					first_line_r2 = '@' + barcode + ',' + UMI + ',' + 'swap' + ',' + name_r2[1:]
+					# first_line_r1 = '@' + barcode + ',' + UMI + ',' + 'swap' + ',' + name_r1[1:]
+					# first_line_r2 = '@' + barcode + ',' + UMI + ',' + 'swap' + ',' + name_r2[1:]
+					first_line_r1 = '@' + 'swap' + ',' + name_r1[1:]
+					first_line_r2 = '@' + 'swap' + ',' + name_r2[1:]
 					f3.write(first_line_r1)
 					f4.write(first_line_r2)
 	
@@ -123,12 +153,27 @@ def SSS_barcode_attach_list(Read1,Read2,label, barcode_list, RT_primer, mismatch
 					break
 					
 			if find == False:
+				first_line_r1 = name_r1
+				first_line_r2 = name_r2
+				f7.write(first_line_r1)
+				f8.write(first_line_r2)
+
+				second_line_r1 = line1
+				second_line_r2 = line2
+				f7.write(second_line_r1)
+				f8.write(second_line_r2)
+
+				third_line_r1 = f1.readline()
+				third_line_r2 = f2.readline()
+				f7.write(third_line_r1)
+				f8.write(third_line_r2)
+
+				four_line_r1 = f1.readline()
+				four_line_r2 = f2.readline()
+				f7.write(four_line_r1)
+				f8.write(four_line_r2)
 				line1 = f1.readline()
-				line1 = f1.readline()
-				line1 = f1.readline()
-				line2 = f2.readline()
-				line2 = f2.readline()
-				line2 = f2.readline()
+				line2 = f2.readline()		
 				
 		#write junk file
 		else: 
@@ -161,11 +206,12 @@ def SSS_barcode_attach_list(Read1,Read2,label, barcode_list, RT_primer, mismatch
 	f4.close()
 	f5.close()
 	f6.close()
+	f7.close()
+	f8.close()
 
 def my_args():
 	mainParser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-	# mainParser.add_argument('-j',"--jid",  help="enter a job ID, which is used to make a new directory. Every output will be moved into this folder.", default=current_file_base_name+'_'+username+"_"+str(datetime.date.today()))	
-	# mainParser.add_argument("--bamCoverage_addon",  help="for PE data, you add --center to get sharper peaks", default="")
+
 	mainParser.add_argument("-r1","--read1",  help="R1 fastq file", required=True)
 	mainParser.add_argument("-r2","--read2",  help="R2 fastq file", required=True)
 	mainParser.add_argument("--sample_ID",  help="sample_ID", required=True)
@@ -184,7 +230,8 @@ def my_args():
 def main():
 
 	args = my_args()
-	SSS_barcode_attach_list(args.read1, args.read2, args.sample_ID, args.barcode_list, args.RT_primer, args.mismatch_sss, args.mismatch_RT)
+	barcode_list = pd.read_csv(args.barcode_list,header=None)[0].tolist()
+	SSS_barcode_attach_list(args.read1, args.read2, args.sample_ID, barcode_list, args.RT_primer, args.mismatch_sss, args.mismatch_RT)
 	
 
 if __name__ == "__main__":

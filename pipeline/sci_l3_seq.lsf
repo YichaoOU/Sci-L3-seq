@@ -1,5 +1,5 @@
 
-=cut sss 1
+=cut dmx 1
 
 inputFile=input
 
@@ -10,37 +10,129 @@ module load conda3
 
 source activate /home/yli11/.conda/envs/Sci_L3
 
+echo `which python`
+
 ## global parameters ##
 
 src=/home/yli11/Programs/Sci-L3-seq/src
 RT_PRIMER=GGGATGCAGCTCGCTCCTG
 SSS_barcode_list=SSS_barcode.list 
-
-  # -h, --help            show this help message and exit
-  # -r1 READ1, --read1 READ1
-                        # R1 fastq file (default: None)
-  # -r2 READ2, --read2 READ2
-                        # R2 fastq file (default: None)
-  # --sample_ID SAMPLE_ID
-                        # sample_ID (default: None)
-  # --RT_primer RT_PRIMER
-                        # RT_primer (default: None)
-  # --barcode_list BARCODE_LIST
-                        # list of barcodes (default: None)
-  # --mismatch_sss MISMATCH_SSS
-                        # mismatch_sss (default: 0)
-  # --mismatch_RT MISMATCH_RT
-                        # mismatch_RT (default: 3)
+barcode_1_list=barcode_1.list 
+barcode_2_list=barcode_2.list 
+TN5_fwd=AGATGTGTATAAGAGACAG
+TN5_rev=CTGTCTCTTATACACATCT
 
 python $src/step1_barcode_SSS.py -r1 ${COL1} -r2 ${COL2} --sample_ID ${COL3} --RT_primer $RT_PRIMER --barcode_list $SSS_barcode_list
 
+cd ${COL3}
+
+python $src/step2_demultiplexing.py -r1 ${COL3}.R1.ordered.fastq.gz -r2 ${COL3}.R2.ordered.fastq.gz --sample_ID ${COL3} --barcode_1_list ../$barcode_1_list --barcode_2_list ../$barcode_2_list --barcode_3_list ../$SSS_barcode_list --UMI_length 4 --bc3_length 6 --sp2_length 19 --bc2_length 7 --sp1_length 6 --bc1_length 8
+
+cd ${COL3}_barcode_demultiplexing
+
+cutadapt -g $TN5_fwd -O 19 -e 0.2 -o ${COL3}.trimmed.R1.fastq.gz ${COL3}.matched.R1.fastq.gz
+
+cutadapt -g $TN5_fwd -a $TN5_rev -O 13 -e 0.2 -o ${COL3}.trimmed.R2.fastq.gz ${COL3}.matched.R2.fastq.gz
+
+
+=cut bwa_hg 2 dmx[*]
+
+inputFile=input
+
+ncore=1
+mem=8000
+
+module load bwa/0.7.16a
+module load samtools/1.7
+
+bwa_human_index=/home/yli11/Data/Human/hg38/bwa_16a_index/hg38.fa
+bwa_mouse_index=/home/yli11/Data/Mouse/mm10/bwa_16a_index/mm10.fa
+
+
+cd ${COL3}/${COL3}_barcode_demultiplexing
+
+mkdir human
+
+cd human
+
+bwa mem -t 4 $bwa_human_index ../${COL3}.trimmed.R1.fastq.gz ../${COL3}.trimmed.R2.fastq.gz | samtools view -bS - > ${COL3}.bam
+
+samtools sort -o ${COL3}.st.bam ${COL3}.bam
+
+samtools index ${COL3}.st.bam
+
+samtools view -b -F 2048 -f 2 ${COL3}.st.bam > ${COL3}.filter.bam
+
+samtools index ${COL3}.filter.bam
+
+module load python/2.7.15-rhel7
+
+bamCoverage -b ${COL3}.st.bam -o ${COL3}.all.bw --numberOfProcessors 4 --centerReads
+
+bamCoverage -b ${COL3}.filter.bam -o ${COL3}.filter.bw --numberOfProcessors 4 --centerReads
+
+module load bedtools/2.25.0
+
+bedtools bamtobed -i ${COL3}.filter.bam > ${COL3}.bed
+
+grep "/1" ${COL3}.bed > ${COL3}.R1.bed
+
+
+=cut bwa_mm 2 dmx[*]
+
+inputFile=input
+
+ncore=1
+mem=8000
+
+module load bwa/0.7.16a
+module load samtools/1.7
+
+bwa_human_index=/home/yli11/Data/Human/hg38/bwa_16a_index/hg38.fa
+bwa_mouse_index=/home/yli11/Data/Mouse/mm10/bwa_16a_index/mm10.fa
+
+
+cd ${COL3}/${COL3}_barcode_demultiplexing
+
+mkdir mouse
+
+cd mouse
+
+bwa mem -t 4 $bwa_mouse_index ../${COL3}.trimmed.R1.fastq.gz ../${COL3}.trimmed.R2.fastq.gz | samtools view -bS - > ${COL3}.bam
+
+samtools sort -o ${COL3}.st.bam ${COL3}.bam
+
+samtools index ${COL3}.st.bam
+
+samtools view -b -F 2048 -f 2 ${COL3}.st.bam > ${COL3}.filter.bam
+
+samtools index ${COL3}.filter.bam
+
+module load python/2.7.15-rhel7
+
+bamCoverage -b ${COL3}.st.bam -o ${COL3}.all.bw --numberOfProcessors 4 --centerReads
+
+bamCoverage -b ${COL3}.filter.bam -o ${COL3}.filter.bw --numberOfProcessors 4 --centerReads
+
+module load bedtools/2.25.0
+
+bedtools bamtobed -i ${COL3}.filter.bam > ${COL3}.bed
+
+grep "/1" ${COL3}.bed > ${COL3}.R1.bed
+
+
+=cut output 3 all
+
+inputFile=input
+
 mv -f ${COL3} {{jid}}
 
+=cut email 4 all
 
+module load python/2.7.13
 
+cd {{jid}}
 
-
-
-
+send_email_v1.py -m "{{jid}} is finished" -j {{jid}}
 
 
