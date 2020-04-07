@@ -14,7 +14,10 @@ import itertools
 	this script accepts and opens a R1 file, a R2 file, an RT primer sequence, and a SSS barcode list; then reorders the read pairs, and extracts and matches the nearest sss barcode and attach the sss barcode to R1 and R2 read names.
 	the output files include ordered R1 and R2 files, noRTprimer.R1.fq.gz and noRTprimer.R2.fq.gz
 	
-python ../../../src/step2_demultiplexing.py -r1 KOK675_S2.noRTprimer.R1.fq.gz -r2 KOK675_S2.noRTprimer.R2.fq.gz --sample_ID test --barcode_1_list barcode_1.list --barcode_2_list barcode_2.list --barcode_3_list SSS_barcode.list --UMI_length 4 --bc3_length 6 --sp2_length 20 --bc2_length 7 --sp1_length 6 --bc1_length 8
+python ../../../src/step2_demultiplexing.py -r1 KOK675_S2.noRTprimer.R1.fq.gz -r2 KOK675_S2.noRTprimer.R2.fq.gz --sample_ID test --barcode_1_list barcode_1.list --barcode_2_list barcode_2.list --barcode_3_list SSS_barcode.list --UMI_length 4 --bc3_length 6 --sp2_length 19 --bc2_length 7 --sp1_length 6 --bc1_length 8
+
+
+python ../../../../src/step2_demultiplexing.py -r1 KOK674_S1.junk.R1.fastq.gz -r2 KOK674_S1.junk.R2.fastq.gz --sample_ID test --barcode_1_list ../../../barcode_1.list --barcode_2_list ../../../barcode_2.list --barcode_3_list ../../../SSS_barcode.list --UMI_length 4 --bc3_length 6 --sp2_length 19 --bc2_length 7 --sp1_length 6 --bc1_length 8
 	
 '''
 
@@ -35,6 +38,7 @@ def dict3d_to_df(x):
 	df['barcode_2'] = bc2
 	df['barcode_1'] = bc1
 	df['total_reads'] = counts
+	df = df.sort_values("total_reads",ascending=False)
 	return df
 	
 
@@ -47,9 +51,12 @@ def k_mer_distance(k,error):
 		out_dict[i]={}
 		for jj in range(ii,len(k_mer)):
 			j = k_mer[jj]
+
 			dist = distance(i, j)
 			if dist <= error:
 				out_dict[i][j] = distance
+				if not j in out_dict:
+					out_dict[j]={}
 				out_dict[j][i] = distance
 	return out_dict
 
@@ -67,9 +74,11 @@ def find_dist(kmer_dict,target_barcode,barcode_list):
 	for x in barcode_list:
 		try:
 			kmer_dict[x][target_barcode] 
+			return True,x
 		except:
-			return False
-	return True
+			pass
+	return False,None
+	
 
 
 def output_to_fastq_gz(file_name,list_of_lines):
@@ -104,7 +113,9 @@ def sci_l3_demultiplexing(Read1,Read2,label, barcode_1_list, barcode_2_list, bar
 	bc2_end = UMI_length+bc3_length+sp2_length+bc2_length
 	bc1_start = UMI_length+bc3_length+sp2_length+bc2_length+sp1_length
 	bc1_end = UMI_length+bc3_length+sp2_length+bc2_length+sp1_length+bc1_length
-		
+	bc3_count =0
+	bc2_count =0
+	bc1_count =0
 	line1 = f1.readline()
 	line2 = f2.readline()
 	count = 0
@@ -120,14 +131,29 @@ def sci_l3_demultiplexing(Read1,Read2,label, barcode_1_list, barcode_2_list, bar
 		bc2 = line1[bc2_start:bc2_end]
 		bc1 = line1[bc1_start:bc1_end]
 		UMI = line1[:UMI_length]
-		bc1_dist = find_dist(bc1_kmer,bc1,barcode_1_list)
-		bc2_dist = find_dist(bc2_kmer,bc2,barcode_2_list)
-		bc3_dist = find_dist(bc3_kmer,bc3,barcode_3_list)
+		bc1_dist,barcode_1 = find_dist(bc1_kmer,bc1,barcode_1_list)
+		bc2_dist,barcode_2 = find_dist(bc2_kmer,bc2,barcode_2_list)
+		bc3_dist,barcode_3 = find_dist(bc3_kmer,bc3,barcode_3_list)
+		# bc1_dist = True
+		# bc2_dist = True
+		# bc3_dist = True
+		if bc1_dist:
+			bc1_count+=1
+		if bc2_dist:
+			bc2_count+=1
+		if bc3_dist:
+			bc3_count+=1
+		# if bc2 in barcode_2_list:
+			# print (bc2)
 
 		if bc1_dist and bc2_dist and bc3_dist :
-			barcode_dict[bc3][bc2][bc1]+=1
-			first_line_r1 = '@' + ",".join([UMI,bc3,bc2,bc1]) + ',' + name_r1[1:]
-			first_line_r2 = '@' + ",".join([UMI,bc3,bc2,bc1])+ ',' + name_r2[1:]
+			barcode_dict[barcode_3][barcode_2][barcode_1]+=1
+			# try:
+				# barcode_dict[bc3][bc2][bc1]+=1
+			# except:
+				# pass
+			first_line_r1 = '@' + ",".join([UMI,barcode_3,barcode_2,barcode_1]) + ',' + name_r1[1:]
+			first_line_r2 = '@' + ",".join([UMI,barcode_3,barcode_2,barcode_1])+ ',' + name_r2[1:]
 			matched_list_R1.append(first_line_r1)
 			matched_list_R2.append(first_line_r2)
 
@@ -176,6 +202,7 @@ def sci_l3_demultiplexing(Read1,Read2,label, barcode_1_list, barcode_2_list, bar
 	output_to_fastq_gz(matched_R2_output,matched_list_R2)
 	df = dict3d_to_df(barcode_dict)
 	df.to_csv(output_folder + "/" + label + ".total_number_reads.tsv",sep="\t",index=False)
+	print ("Sample: %s has %s BC1 %s BC2 %s BC3"%(label,bc1_count,bc2_count,bc3_count))
 	# for bc3 in barcode_3_list:
 		# for bc2 in barcode_2_list:
 			# for bc1 in barcode_1_list:
@@ -204,8 +231,8 @@ def my_args():
 	mainParser.add_argument("--sp1_length",  help="barcode 3 allowed number of mismatches", type=int, required=True)
 	mainParser.add_argument("--bc1_length",  help="barcode 3 allowed number of mismatches", type=int, required=True)
 	mainParser.add_argument("--BC1_error",  help="barcode 1 allowed number of mismatches", type=int,default=0)
-	mainParser.add_argument("--BC2_error",  help="barcode 2 allowed number of mismatches", type=int,default=0)
-	mainParser.add_argument("--BC3_error",  help="barcode 3 allowed number of mismatches", type=int,default=0)
+	mainParser.add_argument("--BC2_error",  help="barcode 2 allowed number of mismatches", type=int,default=1)
+	mainParser.add_argument("--BC3_error",  help="barcode 3 allowed number of mismatches", type=int,default=1)
 	
 
 	mainParser.add_argument('--input', help=argparse.SUPPRESS)
@@ -218,9 +245,12 @@ def main():
 
 	args = my_args()
 	barcode_1_list = pd.read_csv(args.barcode_1_list,header=None)[0].tolist()
+	barcode_1_list = [x.replace(" ","") for x in barcode_1_list]
 	barcode_2_list = pd.read_csv(args.barcode_2_list,header=None)[0].tolist()
+	barcode_2_list = [x.replace(" ","") for x in barcode_2_list]
 	barcode_3_list = pd.read_csv(args.barcode_3_list,header=None)[0].tolist()
-
+	barcode_3_list = [x.replace(" ","") for x in barcode_3_list]
+	# print (barcode_2_list)
 	
 	sci_l3_demultiplexing(args.read1,args.read2,args.sample_ID, barcode_1_list, barcode_2_list, barcode_3_list, args.BC1_error, args.BC2_error, args.BC3_error,args.UMI_length,args.bc3_length,args.sp2_length,args.bc2_length,args.sp1_length,args.bc1_length)
 	
